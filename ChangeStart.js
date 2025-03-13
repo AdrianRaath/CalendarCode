@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
+  // 1) References
   const toggleStart = document.getElementById("toggle-start");
+  const calendarMain = document.getElementById("calendar-main");
 
+  // Day-of-week arrays
   const daysOfWeekSundayStart = [
     "SUN",
     "MON",
@@ -20,38 +23,40 @@ document.addEventListener("DOMContentLoaded", function () {
     "SUN",
   ];
 
-  // Initial render
+  // 2) Render on page load
   renderCalendar();
 
-  // Re-render whenever the toggle changes
+  // 3) Re-render whenever the checkbox changes
   toggleStart.addEventListener("change", function () {
     renderCalendar();
   });
 
+  // 4) The core function that recalculates & re-maps everything
   function renderCalendar() {
-    // 1) Update day-of-week labels
+    // --- (A) Update Day Labels ---
     const dayLabels = document.querySelectorAll(".calendar_day");
     if (toggleStart.checked) {
+      // Monday start
       dayLabels.forEach((labelEl, i) => {
         labelEl.textContent = daysOfWeekMondayStart[i];
       });
     } else {
+      // Sunday start
       dayLabels.forEach((labelEl, i) => {
         labelEl.textContent = daysOfWeekSundayStart[i];
       });
     }
 
-    // 2) Gather info about the current month/year
-    const calendarMain = document.getElementById("calendar-main");
+    // --- (B) Gather month & year info
     const monthName = calendarMain.getAttribute("month");
     const year = parseInt(calendarMain.getAttribute("year"), 10);
     const monthIndex = new Date(`${monthName} 1, 2000`).getMonth();
-
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+    // Raw start day (0=Sunday, 1=Monday, etc.)
     const rawStartDay = new Date(year, monthIndex, 1).getDay();
 
-    // Decide the effective start day (0-based) depending on toggle
-    // Sunday => 0, Monday => (rawStartDay + 6) % 7
+    // If user wants Monday start, shift Sunday => 6, Monday => 0, etc.
     let startDay;
     if (toggleStart.checked) {
       startDay = (rawStartDay + 6) % 7;
@@ -59,50 +64,55 @@ document.addEventListener("DOMContentLoaded", function () {
       startDay = rawStartDay;
     }
 
-    // 3) Collect all .editable-text elements keyed by their current day number
-    //    so we can re-attach them to the correct block after we rebuild.
+    // --- (C) Collect .editable-text from each block, keyed by day number
     const calendarBlocks = document.querySelectorAll(".calendar_block");
-    const dayToTextNodes = {}; // e.g. { 15: [node1, node2], ... }
+    const dayToTextNodes = {}; // e.g. { 1: [node1, node2], 2: [...], ... }
+
     calendarBlocks.forEach((block) => {
       const dayEl = block.querySelector(".calendar_block-day");
-      const dayNum = parseInt(dayEl.textContent, 10);
-      if (!isNaN(dayNum) && dayNum > 0) {
+      const existingDayNum = parseInt(dayEl.textContent, 10);
+
+      if (!isNaN(existingDayNum) && existingDayNum > 0) {
         const textNodes = Array.from(block.querySelectorAll(".editable-text"));
         if (textNodes.length) {
-          dayToTextNodes[dayNum] = (dayToTextNodes[dayNum] || []).concat(
-            textNodes
-          );
+          dayToTextNodes[existingDayNum] = (
+            dayToTextNodes[existingDayNum] || []
+          ).concat(textNodes);
         }
       }
     });
 
-    // 4) Reset all blocks (remove active/inactive, clear day text, etc.)
+    // --- (D) Reset every block before we reassign days
     calendarBlocks.forEach((block) => {
       const dayEl = block.querySelector(".calendar_block-day");
       dayEl.textContent = "";
       block.classList.remove("active", "inactive");
     });
 
-    // 5) Reassign the day numbers for each block based on startDay
+    // --- (E) Reassign each block to the correct day
     calendarBlocks.forEach((block, index) => {
       const dayEl = block.querySelector(".calendar_block-day");
 
+      // If index is within the valid range for this month
       if (index >= startDay && index < startDay + daysInMonth) {
-        // This block is "active" and represents a valid date
-        const dayNum = index - startDay + 1; // 1-based day
-        dayEl.textContent = dayNum;
+        const newDayNum = index - startDay + 1; // 1-based day number
+        dayEl.textContent = newDayNum;
         block.classList.add("active");
 
-        // 6) If we had stored .editable-text nodes for this dayNum, re-append them
-        if (dayToTextNodes[dayNum]) {
-          dayToTextNodes[dayNum].forEach((textNode) => {
+        // If we had stored .editable-text for this day, re-append them
+        if (dayToTextNodes[newDayNum]) {
+          dayToTextNodes[newDayNum].forEach((textNode) => {
             block.appendChild(textNode);
           });
         }
       } else {
-        // It's outside this month's range
         block.classList.add("inactive");
       }
     });
+
+    // --- (F) Re-run your editing logic so only the new active blocks are editable
+    if (typeof enableBlockEditing === "function") {
+      enableBlockEditing();
+    }
   }
 });

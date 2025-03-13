@@ -1,8 +1,21 @@
-document.addEventListener("DOMContentLoaded", function () {
-  // Select all active calendar blocks
+// We define the function, but do NOT call it on DOMContentLoaded here.
+// We'll call it manually later whenever needed.
+function enableBlockEditing() {
+  // First, remove any existing event listeners to avoid duplication:
+  // (An easy approach is to clone each .calendar_block and replace it in the DOM,
+  // but let's do a simpler approach of removing event listeners by re-selecting only newly active blocks.)
+
+  // 1) Remove "click" event from ALL calendar blocks (whether active or not),
+  //    so we don't stack multiple handlers on the same element.
+  const allBlocks = document.querySelectorAll(".calendar_block");
+  allBlocks.forEach((block) => {
+    const newBlock = block.cloneNode(true);
+    block.parentNode.replaceChild(newBlock, block);
+  });
+
+  // Now, only attach a fresh click listener to the *active* blocks
   const activeBlocks = document.querySelectorAll(".calendar_block.active");
 
-  // Add click event listener to each active block
   activeBlocks.forEach((block) => {
     block.addEventListener("click", function (event) {
       event.stopPropagation(); // Prevent triggering the document click listener
@@ -42,8 +55,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // End editing state when clicking outside any block
-  document.addEventListener("click", function () {
+  // 2) End editing state when clicking outside any block
+  document.addEventListener("click", function onDocClick() {
+    // We'll remove this listener and re-add it each time as well
+    // so we don't stack them:
+    document.removeEventListener("click", onDocClick);
+
     const activeTextElement = document.querySelector(
       '.editable-text[contenteditable="true"]'
     );
@@ -62,4 +79,4 @@ document.addEventListener("DOMContentLoaded", function () {
       block.classList.remove("editing");
     });
   });
-});
+}
