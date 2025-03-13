@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const monthName = calendarMain.getAttribute("month");
   const monthIndex = new Date(`${monthName} 1, 2000`).getMonth() + 1; // Convert to 1-based index
 
-  // Function to update holiday visibility
-  function updateHolidays() {
+  // ★ Define updateHolidays on window to ensure it's globally accessible
+  window.updateHolidays = function updateHolidays() {
     // Get the selected country
     const selectedCountry = countryInput.value;
     const countryHolidays = holidays[selectedCountry] || {};
@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const holidayElement = block.querySelector(".calendar_holiday");
 
       if (dayElement && holidayElement) {
-        const day = dayElement.textContent;
+        const day = dayElement.textContent.trim();
 
         // Create a key in the format 'month/day'
         const holidayKey = `${monthIndex}/${day}`;
@@ -76,22 +76,23 @@ document.addEventListener("DOMContentLoaded", function () {
         // Update the holiday text if a holiday exists for this date
         if (countryHolidays[holidayKey]) {
           holidayElement.textContent = countryHolidays[holidayKey];
+          // Show it only if toggleInput is checked
           holidayElement.style.display = toggleInput.checked ? "block" : "none";
         }
       }
     });
-  }
+  };
 
   // Add event listener for the toggle input
-  toggleInput.addEventListener("change", updateHolidays);
+  toggleInput.addEventListener("change", window.updateHolidays);
 
   // Use MutationObserver to detect value changes in the country input
-  const observer = new MutationObserver(updateHolidays);
+  const observer = new MutationObserver(window.updateHolidays);
   observer.observe(countryInput, {
     attributes: true,
     attributeFilter: ["value"],
   });
 
   // Initial check on page load
-  updateHolidays();
+  window.updateHolidays();
 });
