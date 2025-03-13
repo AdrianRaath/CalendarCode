@@ -114,5 +114,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (typeof enableBlockEditing === "function") {
       enableBlockEditing();
     }
+    // ★ (G) Also re-run holiday logic if it exists
+    if (typeof updateHolidays === "function") {
+      updateHolidays();
+    }
   }
 });
