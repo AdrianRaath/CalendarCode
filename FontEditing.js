@@ -1,27 +1,51 @@
-document.addEventListener("DOMContentLoaded", function () {
+window.addEventListener("load", function () {
   //==========================================================
   // SHARED: Google Fonts API
   //==========================================================
   const GOOGLE_FONTS_API_KEY = "AIzaSyBU9KE_ocK-zVqQGuX9Q87Hi61IDyNaunY";
   const GOOGLE_FONTS_API_URL = `https://www.googleapis.com/webfonts/v1/webfonts?key=${GOOGLE_FONTS_API_KEY}&sort=popularity`;
 
+  // Helpers to read initial fonts from data-* (set by SavedCalendarLoader on /display-saved)
+  function getInitialTitleFont() {
+    const titleEl = document.getElementById("calendar-title");
+    if (!titleEl) return null;
+    const family = titleEl.dataset.savedFontFamily;
+    const category = titleEl.dataset.savedFontCategory;
+    if (!family) return null;
+    return { family, category: category || "sans-serif" };
+  }
+
+  function getInitialMainFont() {
+    const mainEl = document.getElementById("calendar-main");
+    if (!mainEl) return null;
+    const family = mainEl.dataset.savedFontFamily;
+    const category = mainEl.dataset.savedFontCategory;
+    if (!family) return null;
+    return { family, category: category || "sans-serif" };
+  }
+
+  // IMPORTANT: now these are evaluated AFTER SavedCalendarLoader has run
+  const savedInitialTitleFont = getInitialTitleFont(); // null on normal pages
+  const savedInitialMainFont = getInitialMainFont(); // null on normal pages
+
   //==========================================================
   // TITLE FONT FUNCTIONALITY
   //==========================================================
   const titleFontFilters = document.getElementById("title-font-filters");
   const titleFontList = document.getElementById("title-font-list");
-  const titleFontOptions = titleFontList.querySelectorAll(".font-option");
+  const titleFontOptions = titleFontList
+    ? titleFontList.querySelectorAll(".font-option")
+    : [];
   const calendarTitle = document.getElementById("calendar-title");
 
-  // "Back" & "More" controls for Title
   const titleBackEl = document.querySelector('[font-nav="title-back"]');
   const titleMoreEl = document.querySelector('[font-nav="title-more"]');
 
-  // Arrays and state for pagination
-  let titleMatchingFonts = []; // all matching fonts for current category
-  let titleCurrentPage = 0; // which "page" of 10 are we on?
+  let titleMatchingFonts = [];
+  let titleCurrentPage = 0;
+  let titleSavedFontApplied = false; // so we only auto-activate once
 
-  // Make sure each .font-option has a .font-preview
+  // Ensure .font-preview exists
   titleFontOptions.forEach((opt) => {
     if (!opt.querySelector(".font-preview")) {
       const previewDiv = document.createElement("div");
@@ -30,66 +54,70 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // 1) Filter clicks => reset page=0, load fonts
-  titleFontFilters.addEventListener("click", function (e) {
-    const filterEl = e.target.closest("[font-category]");
-    if (!filterEl) return;
+  // Filter clicks
+  if (titleFontFilters) {
+    titleFontFilters.addEventListener("click", function (e) {
+      const filterEl = e.target.closest("[font-category]");
+      if (!filterEl) return;
 
-    // Deactivate other filters
-    titleFontFilters
-      .querySelectorAll(".active")
-      .forEach((el) => el.classList.remove("active"));
-    filterEl.classList.add("active");
+      titleFontFilters
+        .querySelectorAll(".active")
+        .forEach((el) => el.classList.remove("active"));
+      filterEl.classList.add("active");
 
-    // Fade out existing previews
-    titleFontOptions.forEach((opt) => {
-      const preview = opt.querySelector(".font-preview");
-      if (preview) preview.style.opacity = 0;
+      titleFontOptions.forEach((opt) => {
+        const preview = opt.querySelector(".font-preview");
+        if (preview) preview.style.opacity = 0;
+      });
+
+      titleCurrentPage = 0;
+      const category = filterEl.getAttribute("font-category");
+      loadTitleFontsForCategory(category);
     });
+  }
 
-    // Reset page
-    titleCurrentPage = 0;
-
-    // Load fonts for chosen category
-    const category = filterEl.getAttribute("font-category");
-    loadTitleFontsForCategory(category);
-  });
-
-  // 2) Load entire set of matching fonts for the chosen category
   async function loadTitleFontsForCategory(category) {
     try {
       const response = await fetch(GOOGLE_FONTS_API_URL);
       const data = await response.json();
 
-      // Filter by category => store them all
       titleMatchingFonts = data.items.filter(
         (font) => font.category === category
       );
 
-      // After fetching, display the correct "page" of 10
+      // If we have a saved initial title font AND this category matches it,
+      // jump to the page containing that family.
+      if (
+        savedInitialTitleFont &&
+        savedInitialTitleFont.category === category &&
+        !titleSavedFontApplied
+      ) {
+        const idx = titleMatchingFonts.findIndex(
+          (f) => f.family === savedInitialTitleFont.family
+        );
+        if (idx !== -1) {
+          titleCurrentPage = Math.floor(idx / 10);
+        } else {
+          titleCurrentPage = 0;
+        }
+      } else {
+        titleCurrentPage = titleCurrentPage || 0;
+      }
+
       displayTitleFontPage();
     } catch (err) {
       console.error("Error loading title fonts:", err);
     }
   }
 
-  // 3) Display the current "page" of 10 fonts from titleMatchingFonts
   function displayTitleFontPage() {
-    // Slice out the chunk of 10 we want
     const startIndex = titleCurrentPage * 10;
     const endIndex = startIndex + 10;
     const currentSlice = titleMatchingFonts.slice(startIndex, endIndex);
 
-    // Build the link for these 10 families
-    const familiesToLoad = currentSlice
-      .map((f) => f.family.replace(/\s+/g, "+"))
-      .join("&family=");
-
-    // Remove old link
     const oldLink = document.getElementById("title-fonts-link");
     if (oldLink) oldLink.remove();
 
-    // If we have no fonts at all, just clear the UI
     if (!currentSlice.length) {
       titleFontOptions.forEach((opt) => {
         opt.setAttribute("font", "");
@@ -104,18 +132,20 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Create the new link to load
+    const familiesToLoad = currentSlice
+      .map((f) => f.family.replace(/\s+/g, "+"))
+      .join("&family=");
+
     const newLink = document.createElement("link");
     newLink.id = "title-fonts-link";
     newLink.rel = "stylesheet";
     newLink.href = `https://fonts.googleapis.com/css2?family=${familiesToLoad}&display=swap`;
     document.head.appendChild(newLink);
 
-    // Once loaded, populate .font-option
     newLink.onload = () => {
       titleFontOptions.forEach((optionEl, idx) => {
         const preview = optionEl.querySelector(".font-preview");
-        const fontObj = currentSlice[idx]; // might be undefined if < 10 remain
+        const fontObj = currentSlice[idx];
 
         if (fontObj) {
           const fontName = fontObj.family;
@@ -127,18 +157,38 @@ document.addEventListener("DOMContentLoaded", function () {
           preview.textContent = fontName;
           preview.style.fontFamily = `"${fontName}", ${fontCat}`;
         } else {
-          // Clear out if no font
           optionEl.setAttribute("font", "");
           optionEl.setAttribute("font-cat", "");
           preview.textContent = "";
           preview.style.fontFamily = "";
         }
-        // Fade in
         preview.style.opacity = 1;
       });
 
-      // After populating, re-apply any .font-option.active if it has a valid font
-      const activeOption = titleFontList.querySelector(".font-option.active");
+      let activeOption = null;
+
+      // FIRST: try to activate the saved font if present on this page
+      if (savedInitialTitleFont && !titleSavedFontApplied) {
+        const localIdx = currentSlice.findIndex(
+          (f) => f.family === savedInitialTitleFont.family
+        );
+        if (localIdx !== -1 && titleFontOptions[localIdx]) {
+          titleFontOptions.forEach((opt) => opt.classList.remove("active"));
+          activeOption = titleFontOptions[localIdx];
+          activeOption.classList.add("active");
+          titleSavedFontApplied = true;
+          console.log(
+            "FontEditing: Activated saved title font in modal:",
+            savedInitialTitleFont.family
+          );
+        }
+      }
+
+      // FALLBACK: if we still don't have an active option, use whatever is marked .active
+      if (!activeOption && titleFontList) {
+        activeOption = titleFontList.querySelector(".font-option.active");
+      }
+
       if (activeOption) {
         const chosenFont = activeOption.getAttribute("font");
         const chosenCat = activeOption.getAttribute("font-cat");
@@ -152,14 +202,12 @@ document.addEventListener("DOMContentLoaded", function () {
     };
   }
 
-  // 4) .font-option click => set active, apply font
+  // Clicks
   titleFontOptions.forEach((optionEl) => {
     optionEl.addEventListener("click", () => {
-      // Deactivate others
       titleFontOptions.forEach((opt) => opt.classList.remove("active"));
       optionEl.classList.add("active");
 
-      // Apply chosen font to #calendar-title
       const chosenFont = optionEl.getAttribute("font");
       const chosenCat = optionEl.getAttribute("font-cat");
       if (chosenFont) {
@@ -171,7 +219,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // 5) "Back" and "More" for Title
+  // Back / More
   if (titleBackEl) {
     titleBackEl.addEventListener("click", () => {
       if (titleCurrentPage > 0) {
@@ -182,7 +230,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   if (titleMoreEl) {
     titleMoreEl.addEventListener("click", () => {
-      // e.g. if we have 50 fonts total, max page index is floor( (50-1)/10 ) = 4
       const maxPage = Math.floor((titleMatchingFonts.length - 1) / 10);
       if (titleCurrentPage < maxPage) {
         titleCurrentPage += 1;
@@ -191,33 +238,53 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // On page load, whichever filter is .active => load that category
-  const initiallyActiveTitleFilter = titleFontFilters.querySelector(".active");
-  if (initiallyActiveTitleFilter) {
-    loadTitleFontsForCategory(
-      initiallyActiveTitleFilter.getAttribute("font-category")
-    );
+  // Initial category selection for Title
+  if (titleFontFilters) {
+    const initiallyActiveTitleFilter =
+      titleFontFilters.querySelector(".active");
+
+    // If we have a saved title font, try to switch to its category filter
+    if (savedInitialTitleFont) {
+      const filterForSaved = titleFontFilters.querySelector(
+        `[font-category="${savedInitialTitleFont.category}"]`
+      );
+      if (filterForSaved) {
+        titleFontFilters
+          .querySelectorAll(".active")
+          .forEach((el) => el.classList.remove("active"));
+        filterForSaved.classList.add("active");
+        loadTitleFontsForCategory(savedInitialTitleFont.category);
+      } else if (initiallyActiveTitleFilter) {
+        loadTitleFontsForCategory(
+          initiallyActiveTitleFilter.getAttribute("font-category")
+        );
+      }
+    } else if (initiallyActiveTitleFilter) {
+      loadTitleFontsForCategory(
+        initiallyActiveTitleFilter.getAttribute("font-category")
+      );
+    }
   }
 
   //==========================================================
-  // MAIN FONT FUNCTIONALITY (identical logic, different IDs)
+  // MAIN FONT FUNCTIONALITY
   //==========================================================
   const mainFontFilters = document.getElementById("main-font-filters");
   const mainFontList = document.getElementById("main-font-list");
-  const mainFontOptions = mainFontList.querySelectorAll(".font-option");
+  const mainFontOptions = mainFontList
+    ? mainFontList.querySelectorAll(".font-option")
+    : [];
 
   const calendarMain = document.getElementById("calendar-main");
   const calendarDays = document.getElementById("calendar-days");
 
-  // "Back" & "More" controls for Main
   const mainBackEl = document.querySelector('[font-nav="main-back"]');
   const mainMoreEl = document.querySelector('[font-nav="main-more"]');
 
-  // Arrays and state for pagination (main)
   let mainMatchingFonts = [];
   let mainCurrentPage = 0;
+  let mainSavedFontApplied = false;
 
-  // Ensure each main .font-option has .font-preview
   mainFontOptions.forEach((opt) => {
     if (!opt.querySelector(".font-preview")) {
       const previewDiv = document.createElement("div");
@@ -226,29 +293,28 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Main: filter clicks => reset page=0, load
-  mainFontFilters.addEventListener("click", function (e) {
-    const filterEl = e.target.closest("[font-category]");
-    if (!filterEl) return;
+  // Main filter clicks
+  if (mainFontFilters) {
+    mainFontFilters.addEventListener("click", function (e) {
+      const filterEl = e.target.closest("[font-category]");
+      if (!filterEl) return;
 
-    // Deactivate other filters
-    mainFontFilters
-      .querySelectorAll(".active")
-      .forEach((el) => el.classList.remove("active"));
-    filterEl.classList.add("active");
+      mainFontFilters
+        .querySelectorAll(".active")
+        .forEach((el) => el.classList.remove("active"));
+      filterEl.classList.add("active");
 
-    // Fade out previews
-    mainFontOptions.forEach((opt) => {
-      const preview = opt.querySelector(".font-preview");
-      if (preview) preview.style.opacity = 0;
+      mainFontOptions.forEach((opt) => {
+        const preview = opt.querySelector(".font-preview");
+        if (preview) preview.style.opacity = 0;
+      });
+
+      mainCurrentPage = 0;
+      const category = filterEl.getAttribute("font-category");
+      loadMainFontsForCategory(category);
     });
+  }
 
-    mainCurrentPage = 0;
-    const category = filterEl.getAttribute("font-category");
-    loadMainFontsForCategory(category);
-  });
-
-  // Main: load entire set for category
   async function loadMainFontsForCategory(category) {
     try {
       const response = await fetch(GOOGLE_FONTS_API_URL);
@@ -257,24 +323,39 @@ document.addEventListener("DOMContentLoaded", function () {
       mainMatchingFonts = data.items.filter(
         (font) => font.category === category
       );
+
+      if (
+        savedInitialMainFont &&
+        savedInitialMainFont.category === category &&
+        !mainSavedFontApplied
+      ) {
+        const idx = mainMatchingFonts.findIndex(
+          (f) => f.family === savedInitialMainFont.family
+        );
+        if (idx !== -1) {
+          mainCurrentPage = Math.floor(idx / 10);
+        } else {
+          mainCurrentPage = 0;
+        }
+      } else {
+        mainCurrentPage = mainCurrentPage || 0;
+      }
+
       displayMainFontPage();
     } catch (err) {
       console.error("Error loading main fonts:", err);
     }
   }
 
-  // Main: display current page of fonts
   function displayMainFontPage() {
     const startIndex = mainCurrentPage * 10;
     const endIndex = startIndex + 10;
     const currentSlice = mainMatchingFonts.slice(startIndex, endIndex);
 
-    // Remove old link
     const oldLink = document.getElementById("main-fonts-link");
     if (oldLink) oldLink.remove();
 
     if (!currentSlice.length) {
-      // No fonts => clear
       mainFontOptions.forEach((opt) => {
         opt.setAttribute("font", "");
         opt.setAttribute("font-cat", "");
@@ -288,7 +369,6 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Build link
     const familiesToLoad = currentSlice
       .map((f) => f.family.replace(/\s+/g, "+"))
       .join("&family=");
@@ -314,7 +394,6 @@ document.addEventListener("DOMContentLoaded", function () {
           preview.textContent = fontName;
           preview.style.fontFamily = `"${fontName}", ${fontCat}`;
         } else {
-          // Clear
           optionEl.setAttribute("font", "");
           optionEl.setAttribute("font-cat", "");
           preview.textContent = "";
@@ -323,46 +402,67 @@ document.addEventListener("DOMContentLoaded", function () {
         preview.style.opacity = 1;
       });
 
-      // Re-apply .font-option.active if it has a valid font
-      const activeOption = mainFontList.querySelector(".font-option.active");
+      let activeOption = null;
+
+      // FIRST: try to activate the saved main font if present on this page
+      if (savedInitialMainFont && !mainSavedFontApplied) {
+        const localIdx = currentSlice.findIndex(
+          (f) => f.family === savedInitialMainFont.family
+        );
+        if (localIdx !== -1 && mainFontOptions[localIdx]) {
+          mainFontOptions.forEach((opt) => opt.classList.remove("active"));
+          activeOption = mainFontOptions[localIdx];
+          activeOption.classList.add("active");
+          mainSavedFontApplied = true;
+          console.log(
+            "FontEditing: Activated saved main font in modal:",
+            savedInitialMainFont.family
+          );
+        }
+      }
+
+      // FALLBACK: if still no active option, use existing .active
+      if (!activeOption && mainFontList) {
+        activeOption = mainFontList.querySelector(".font-option.active");
+      }
+
       if (activeOption) {
         const chosenFont = activeOption.getAttribute("font");
         const chosenCat = activeOption.getAttribute("font-cat");
         if (chosenFont) {
-          calendarMain.style.fontFamily = `"${chosenFont}", ${
-            chosenCat || "sans-serif"
-          }`;
-          calendarDays.style.fontFamily = `"${chosenFont}", ${
-            chosenCat || "sans-serif"
-          }`;
+          const familyStr = `"${chosenFont}", ${chosenCat || "sans-serif"}`;
+          if (calendarMain) {
+            calendarMain.style.fontFamily = familyStr;
+          }
+          if (calendarDays) {
+            calendarDays.style.fontFamily = familyStr;
+          }
           console.log(`Selected main font: ${chosenFont} (${chosenCat})`);
         }
       }
     };
   }
 
-  // Main: .font-option click => set active, apply
   mainFontOptions.forEach((optionEl) => {
     optionEl.addEventListener("click", () => {
-      // Deactivate others
       mainFontOptions.forEach((opt) => opt.classList.remove("active"));
       optionEl.classList.add("active");
 
       const chosenFont = optionEl.getAttribute("font");
       const chosenCat = optionEl.getAttribute("font-cat");
       if (chosenFont) {
-        calendarMain.style.fontFamily = `"${chosenFont}", ${
-          chosenCat || "sans-serif"
-        }`;
-        calendarDays.style.fontFamily = `"${chosenFont}", ${
-          chosenCat || "sans-serif"
-        }`;
+        const familyStr = `"${chosenFont}", ${chosenCat || "sans-serif"}`;
+        if (calendarMain) {
+          calendarMain.style.fontFamily = familyStr;
+        }
+        if (calendarDays) {
+          calendarDays.style.fontFamily = familyStr;
+        }
         console.log(`Selected main font: ${chosenFont} (${chosenCat})`);
       }
     });
   });
 
-  // Main: "Back" & "More"
   if (mainBackEl) {
     mainBackEl.addEventListener("click", () => {
       if (mainCurrentPage > 0) {
@@ -381,11 +481,28 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // On page load, load the initial .active filter for main
-  const initiallyActiveMainFilter = mainFontFilters.querySelector(".active");
-  if (initiallyActiveMainFilter) {
-    loadMainFontsForCategory(
-      initiallyActiveMainFilter.getAttribute("font-category")
-    );
+  if (mainFontFilters) {
+    const initiallyActiveMainFilter = mainFontFilters.querySelector(".active");
+
+    if (savedInitialMainFont) {
+      const filterForSaved = mainFontFilters.querySelector(
+        `[font-category="${savedInitialMainFont.category}"]`
+      );
+      if (filterForSaved) {
+        mainFontFilters
+          .querySelectorAll(".active")
+          .forEach((el) => el.classList.remove("active"));
+        filterForSaved.classList.add("active");
+        loadMainFontsForCategory(savedInitialMainFont.category);
+      } else if (initiallyActiveMainFilter) {
+        loadMainFontsForCategory(
+          initiallyActiveMainFilter.getAttribute("font-category")
+        );
+      }
+    } else if (initiallyActiveMainFilter) {
+      loadMainFontsForCategory(
+        initiallyActiveMainFilter.getAttribute("font-category")
+      );
+    }
   }
 });

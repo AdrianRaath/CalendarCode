@@ -4,6 +4,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const swatchContainer = document.getElementById("swatch-container");
   const calendar = document.querySelector(".calendar_component");
 
+  if (!swatchContainer || !calendar) return;
+
   // Remove placeholder swatches on page load
   swatchContainer.innerHTML = "";
 
@@ -24,10 +26,17 @@ document.addEventListener("DOMContentLoaded", function () {
     return combos;
   }
 
-  // Create swatches
-  // isInitialLoad = true => try to select white/black if it exists
-  // isInitialLoad = false => just select the first swatch
-  function displaySwatches(primary, isInitialLoad = false) {
+  /**
+   * Create swatches
+   * @param {string} primary - base color
+   * @param {boolean} isInitialLoad
+   * @param {Object|null} preferredCombo - { bg, text } to prefer as active if it exists
+   */
+  function displaySwatches(
+    primary,
+    isInitialLoad = false,
+    preferredCombo = null
+  ) {
     // Clear out any old swatches
     swatchContainer.innerHTML = "";
 
@@ -54,8 +63,30 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Decide which swatch to select by default
     let defaultIndex = 0;
-    if (isInitialLoad) {
-      // On page load, try to find white bg & black text
+
+    // 1) If a preferred combo (saved colors) is provided, try to match it
+    if (preferredCombo && preferredCombo.bg && preferredCombo.text) {
+      const prefBg = tinycolor(preferredCombo.bg).toHexString();
+      const prefText = tinycolor(preferredCombo.text).toHexString();
+      const matchIndex = swatchEls.findIndex(
+        (s) =>
+          tinycolor(s.combo.bg).toHexString() === prefBg &&
+          tinycolor(s.combo.text).toHexString() === prefText
+      );
+      if (matchIndex !== -1) {
+        defaultIndex = matchIndex;
+      } else if (isInitialLoad) {
+        // fallback to white/black logic if we didn't find a match
+        defaultIndex = swatchEls.findIndex(
+          (s) =>
+            s.combo.bg.toLowerCase() === "#ffffff" &&
+            s.combo.text.toLowerCase() === "#000000"
+        );
+        if (defaultIndex === -1) defaultIndex = 0;
+      }
+    }
+    // 2) No preferred combo: keep your original initial-load behavior
+    else if (isInitialLoad) {
       defaultIndex = swatchEls.findIndex(
         (s) =>
           s.combo.bg.toLowerCase() === "#ffffff" &&
@@ -89,17 +120,46 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Handle color input changes
-  colorInput.addEventListener("input", () => {
-    displaySwatches(colorInput.value, false);
-  });
+  if (colorInput) {
+    colorInput.addEventListener("input", () => {
+      displaySwatches(colorInput.value, false);
+    });
+  }
 
   // Handle randomize
-  randomizeButton.addEventListener("click", () => {
-    const randomColor = tinycolor.random().toHexString();
-    colorInput.value = randomColor;
-    displaySwatches(randomColor, false);
-  });
+  if (randomizeButton) {
+    randomizeButton.addEventListener("click", () => {
+      const randomColor = tinycolor.random().toHexString();
+      if (colorInput) {
+        colorInput.value = randomColor;
+      }
+      displaySwatches(randomColor, false);
+    });
+  }
 
   // Initial load => default color white (#ffffff) => pick white/black if found
   displaySwatches("#ffffff", true);
+
+  // -------------------------------------------------
+  // Expose a helper for SavedCalendarLoader
+  // -------------------------------------------------
+  window.syncColorModalWithSaved = function (savedColors) {
+    if (!savedColors || !savedColors.bg) return;
+
+    const preferredCombo = {
+      bg: savedColors.bg,
+      // If text not provided, pick readable one just so we have a pair
+      text:
+        savedColors.text ||
+        tinycolor.mostReadable(savedColors.bg, ["#000", "#fff"]).toHexString(),
+    };
+
+    // Update the base color input so future randomizations feel consistent
+    if (colorInput) {
+      colorInput.value = savedColors.bg;
+    }
+
+    // Rebuild swatches from the saved base and try to select the exact combo
+    displaySwatches(savedColors.bg, false, preferredCombo);
+  };
 });
