@@ -56,6 +56,21 @@ document.addEventListener("DOMContentLoaded", function () {
         "11/26": "Thanksgiving Day",
         "12/25": "Christmas Day",
       },
+      // -------------------------------- 2027 --------------------------------
+      2027: {
+        "1/1": "New Year's Day",
+        "1/18": "Martin Luther King Jr. Day",
+        "2/15": "Presidents' Day",
+        "3/26": "Good Friday",
+        "3/28": "Easter Sunday",
+        "5/31": "Memorial Day",
+        "7/4": "Independence Day",
+        "9/6": "Labor Day",
+        "10/11": "Columbus Day",
+        "11/11": "Veterans Day",
+        "11/25": "Thanksgiving Day",
+        "12/25": "Christmas Day",
+      },
     },
     UK: {
       // -------------------------------- 2023 --------------------------------
@@ -102,6 +117,17 @@ document.addEventListener("DOMContentLoaded", function () {
         "12/25": "Christmas Day",
         "12/26": "Boxing Day",
       },
+      // -------------------------------- 2027 --------------------------------
+      2027: {
+        "1/1": "New Year's Day",
+        "3/26": "Good Friday",
+        "3/29": "Easter Monday",
+        "5/3": "Early May Bank Holiday",
+        "5/31": "Spring Bank Holiday",
+        "8/30": "Summer Bank Holiday",
+        "12/25": "Christmas Day",
+        "12/26": "Boxing Day",
+      },
     },
     Canada: {
       // -------------------------------- 2023 --------------------------------
@@ -145,6 +171,18 @@ document.addEventListener("DOMContentLoaded", function () {
         "7/1": "Canada Day",
         "9/7": "Labour Day",
         "10/12": "Thanksgiving Day",
+        "11/11": "Remembrance Day",
+        "12/25": "Christmas Day",
+      },
+      // -------------------------------- 2027 --------------------------------
+      2027: {
+        "1/1": "New Year's Day",
+        "2/15": "Family Day",
+        "3/26": "Good Friday",
+        "3/28": "Easter Sunday",
+        "7/1": "Canada Day",
+        "9/6": "Labour Day",
+        "10/11": "Thanksgiving Day",
         "11/11": "Remembrance Day",
         "12/25": "Christmas Day",
       },
